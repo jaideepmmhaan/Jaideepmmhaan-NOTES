@@ -29,6 +29,7 @@ export interface Note {
   updatedAt: number;
   blocks: Block[];
   isPinned: boolean;
+  isHidden?: boolean; // New field for hiding notes
   theme?: Theme; // Per-note theme override optional, but app-wide is default
 }
 

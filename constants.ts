@@ -13,19 +13,19 @@ export const THEMES: Record<Theme, ThemeColors> = {
     border: "border-neutral-800",
   },
   pink: {
-    bg: "bg-[#2a0a12]", // Deep brownish pink
-    surface: "bg-[#3d101a]",
-    text: "text-rose-100",
-    textMuted: "text-rose-300/50",
-    accent: "text-rose-400",
-    border: "border-rose-900/30",
+    bg: "bg-[#2e0b16]", // Slightly richer deep pink
+    surface: "bg-[#4a1220]",
+    text: "text-pink-100",
+    textMuted: "text-pink-300/50",
+    accent: "text-pink-500", // Hot Pink
+    border: "border-pink-900/30",
   },
   royal: {
-    bg: "bg-[#050a14]", // Deep navy
-    surface: "bg-[#0a152e]",
-    text: "text-slate-200",
-    textMuted: "text-slate-500",
-    accent: "text-amber-400", // Gold
+    bg: "bg-[#020617]", // Darker Navy
+    surface: "bg-[#0f172a]",
+    text: "text-blue-50",
+    textMuted: "text-blue-300/50",
+    accent: "text-amber-400", // Gold for Royale
     border: "border-blue-900/30",
   },
 };

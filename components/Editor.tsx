@@ -2,21 +2,27 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Note, Block, BlockType, Theme } from '../types';
 import { BlockRender } from './BlockRender';
 import { generateId } from '../utils';
-import { ArrowLeft, Image as ImageIcon, Video, Type, MoreVertical } from 'lucide-react';
+import { ArrowLeft, Image as ImageIcon, Video, Type, Share, Eye, EyeOff, Trash2, RotateCcw } from 'lucide-react';
 import { AUTHOR_HANDLE, THEMES } from '../constants';
 
 interface EditorProps {
   note: Note | null;
   onSave: (note: Note) => void;
   onBack: () => void;
+  onDeleteNote: (id: string) => void;
   currentTheme: Theme;
 }
 
-const Editor: React.FC<EditorProps> = ({ note, onSave, onBack, currentTheme }) => {
+const Editor: React.FC<EditorProps> = ({ note, onSave, onBack, onDeleteNote, currentTheme }) => {
   // If creating new note, start with empty state
   const [blocks, setBlocks] = useState<Block[]>(note?.blocks || []);
   const [title, setTitle] = useState(note?.title || '');
   const [lastEdited, setLastEdited] = useState(note?.updatedAt || Date.now());
+  const [isHidden, setIsHidden] = useState(note?.isHidden || false);
+  
+  // Local Block Undo State
+  const [deletedBlock, setDeletedBlock] = useState<{ block: Block, index: number } | null>(null);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
 
@@ -34,6 +40,7 @@ const Editor: React.FC<EditorProps> = ({ note, onSave, onBack, currentTheme }) =
         updatedAt: Date.now(),
         blocks,
         isPinned: note?.isPinned || false,
+        isHidden,
         theme: currentTheme, // Use app theme if note theme not set
       };
       
@@ -44,7 +51,7 @@ const Editor: React.FC<EditorProps> = ({ note, onSave, onBack, currentTheme }) =
     }, 1000);
 
     return () => clearTimeout(timer);
-  }, [blocks, title, currentTheme, note, onSave]);
+  }, [blocks, title, currentTheme, isHidden, note, onSave]);
 
   const addBlock = (type: BlockType, content: string = '') => {
     const newBlock: Block = {
@@ -82,7 +89,59 @@ const Editor: React.FC<EditorProps> = ({ note, onSave, onBack, currentTheme }) =
   };
 
   const deleteBlock = (id: string) => {
+    const blockIndex = blocks.findIndex(b => b.id === id);
+    if (blockIndex === -1) return;
+    const blockToDelete = blocks[blockIndex];
+    
+    // Save for undo
+    setDeletedBlock({ block: blockToDelete, index: blockIndex });
+    
+    // Remove
     setBlocks(prev => prev.filter(b => b.id !== id));
+
+    // Clear undo after 4s
+    setTimeout(() => {
+        setDeletedBlock(curr => curr?.block.id === id ? null : curr);
+    }, 4000);
+  };
+
+  const restoreBlock = () => {
+      if (deletedBlock) {
+          setBlocks(prev => {
+              const newBlocks = [...prev];
+              newBlocks.splice(deletedBlock.index, 0, deletedBlock.block);
+              return newBlocks;
+          });
+          setDeletedBlock(null);
+      }
+  };
+
+  const toggleHidden = () => {
+      setIsHidden(!isHidden);
+  };
+
+  const handleShare = async () => {
+    const textContent = blocks
+        .filter(b => b.type === 'text')
+        .map(b => b.content)
+        .join('\n\n');
+    
+    const shareData = {
+        title: title,
+        text: `FRAME NOTES: ${title}\n\n${textContent}`,
+        // url: window.location.href // Optional: share app link
+    };
+
+    try {
+        if (navigator.share) {
+            await navigator.share(shareData);
+        } else {
+            await navigator.clipboard.writeText(shareData.text);
+            alert("Summary copied to clipboard");
+        }
+    } catch (err) {
+        console.error("Share failed", err);
+    }
   };
 
   return (
@@ -95,13 +154,35 @@ const Editor: React.FC<EditorProps> = ({ note, onSave, onBack, currentTheme }) =
         >
           <ArrowLeft size={24} />
         </button>
-        <div className="flex items-center gap-2">
-           <span className={`text-xs uppercase tracking-widest ${themeColors.textMuted} opacity-50`}>
-             {lastEdited ? 'Saved' : 'Editing'}
-           </span>
-           <button className={`${themeColors.text} hover:opacity-70 ml-2`}>
-             <MoreVertical size={20} />
+        <div className="flex items-center gap-4">
+           {/* Share Button */}
+           <button 
+              onClick={handleShare}
+              className={`${themeColors.text} hover:opacity-70 transition-transform active:scale-95`}
+              title="Share Summary"
+           >
+              <Share size={20} />
            </button>
+
+           {/* Hide/Unhide */}
+           <button 
+              onClick={toggleHidden}
+              className={`${themeColors.text} hover:opacity-70 transition-transform active:scale-95`}
+              title={isHidden ? "Unhide Frame" : "Hide Frame"}
+           >
+             {isHidden ? <EyeOff size={20} className="text-red-400" /> : <Eye size={20} className="opacity-50 hover:opacity-100" />}
+           </button>
+
+           {/* Delete Note */}
+           {note && (
+               <button 
+                  onClick={() => onDeleteNote(note.id)}
+                  className={`text-red-400/70 hover:text-red-500 transition-colors ml-2`}
+                  title="Delete Frame"
+               >
+                  <Trash2 size={20} />
+               </button>
+           )}
         </div>
       </header>
 
@@ -118,7 +199,7 @@ const Editor: React.FC<EditorProps> = ({ note, onSave, onBack, currentTheme }) =
         />
 
         {/* Blocks */}
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-4 relative">
           {blocks.map(block => (
             <BlockRender 
               key={block.id} 
@@ -131,6 +212,19 @@ const Editor: React.FC<EditorProps> = ({ note, onSave, onBack, currentTheme }) =
             />
           ))}
         </div>
+
+        {/* Local Block Undo Toast */}
+        {deletedBlock && (
+             <div className="sticky bottom-4 mx-auto w-max z-10 animate-in fade-in slide-in-from-bottom-2">
+                  <button 
+                    onClick={restoreBlock}
+                    className="flex items-center gap-2 px-4 py-2 bg-neutral-800 border border-neutral-700 rounded-full shadow-xl text-xs text-white hover:bg-neutral-700 transition-colors"
+                  >
+                      <span>Item Deleted</span>
+                      <span className="text-cyan-400 font-bold ml-2">UNDO</span>
+                  </button>
+             </div>
+        )}
 
         {/* Empty State Prompt */}
         {blocks.length === 0 && (
